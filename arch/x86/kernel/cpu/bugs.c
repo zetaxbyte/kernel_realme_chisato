@@ -84,31 +84,6 @@ u64 spec_ctrl_current(void)
 EXPORT_SYMBOL_GPL(spec_ctrl_current);
 
 /*
- * The vendor and possibly platform specific bits which can be modified in
- * x86_spec_ctrl_base.
- */
-void write_spec_ctrl_current(u64 val, bool force)
-{
-	if (this_cpu_read(x86_spec_ctrl_current) == val)
-		return;
-
-	this_cpu_write(x86_spec_ctrl_current, val);
-
-	/*
-	 * When KERNEL_IBRS this MSR is written on return-to-user, unless
-	 * forced the update can be delayed until that time.
-	 */
-	if (force || !cpu_feature_enabled(X86_FEATURE_KERNEL_IBRS))
-		wrmsrl(MSR_IA32_SPEC_CTRL, val);
-}
-
-u64 spec_ctrl_current(void)
-{
-	return this_cpu_read(x86_spec_ctrl_current);
-}
-EXPORT_SYMBOL_GPL(spec_ctrl_current);
-
-/*
  * AMD specific MSR info for Speculative Store Bypass control.
  * x86_amd_ls_cfg_ssbd_mask is initialized in identify_boot_cpu().
  */
@@ -217,18 +192,10 @@ void __init check_bugs(void)
 void
 x86_virt_spec_ctrl(u64 guest_spec_ctrl, u64 guest_virt_spec_ctrl, bool setguest)
 {
-	u64 msrval, guestval, hostval = spec_ctrl_current();
+	u64 msrval, guestval = guest_spec_ctrl, hostval = spec_ctrl_current();
 	struct thread_info *ti = current_thread_info();
 
 	if (static_cpu_has(X86_FEATURE_MSR_SPEC_CTRL)) {
-		/*
-		 * Restrict guest_spec_ctrl to supported values. Clear the
-		 * modifiable bits in the host base value and or the
-		 * modifiable bits from the guest value.
-		 */
-		guestval = hostval & ~x86_spec_ctrl_mask;
-		guestval |= guest_spec_ctrl & x86_spec_ctrl_mask;
-
 		if (hostval != guestval) {
 			msrval = setguest ? guestval : hostval;
 			wrmsrl(MSR_IA32_SPEC_CTRL, msrval);
